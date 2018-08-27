@@ -1,9 +1,5 @@
 pipeline {
-    agent {
-        node {
-            label 'terraform'
-        }
-    }
+     agent any
 environment {
         TERRAFORM_CMD = 'docker run --network host " -w /app -v ${HOME}/.aws:/root/.aws -v ${HOME}/.ssh:/root/.ssh -v `pwd`:/app hashicorp/terraform:light'
     }
