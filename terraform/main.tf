@@ -26,13 +26,13 @@ data "aws_security_group" "default" {
 ######
 # ELB
 ######
-module "elb" {
-  source = "../../"
+module "elb_http" {
+  source = "terraform-aws-modules/elb/aws"
 
   name = "elb-example"
 
-  subnets         = ["${data.aws_subnet_ids.all.ids}"]
-  security_groups = ["${data.aws_security_group.default.id}"]
+  subnets         = ["subnet-12345678", "subnet-87654321"]
+  security_groups = ["sg-12345678"]
   internal        = false
 
   listener = [
@@ -40,12 +40,6 @@ module "elb" {
       instance_port     = "80"
       instance_protocol = "HTTP"
       lb_port           = "80"
-      lb_protocol       = "HTTP"
-    },
-    {
-      instance_port     = "8080"
-      instance_protocol = "HTTP"
-      lb_port           = "8080"
       lb_protocol       = "HTTP"
     },
   ]
@@ -60,20 +54,20 @@ module "elb" {
     },
   ]
 
-  // Uncomment this section and set correct bucket name to enable access logging
-  //  access_logs = [
-  //    {
-  //      bucket = "my-access-logs-bucket"
-  //    },
-  //  ]
+  access_logs = [
+    {
+      bucket = "my-access-logs-bucket"
+    },
+  ]
 
+  // ELB attachments
+  number_of_instances = 2
+  instances           = "${aws_instance.web.*.id}"
+  
   tags = {
     Owner       = "user"
     Environment = "dev"
   }
-  # ELB attachments
-  number_of_instances = "${var.number_of_instances}"
-  instances           = ["${module.ec2_instances.id}"]
 }
 ### CLOUD init
 
@@ -98,16 +92,28 @@ data "template_cloudinit_config" "config" {
 ################
 # EC2 instances
 ################
-module "ec2_instances" {
-  source = "terraform-aws-modules/ec2-instance/aws"
+data "aws_ami" "ubuntu" {
+  most_recent = true
 
-  instance_count = "${var.number_of_instances}"
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-*"]
+  }
 
-  name                        = "my-app"
-  ami                         = "ami-ebd02392"
-  instance_type               = "t2.micro"
-  vpc_security_group_ids      = ["${data.aws_security_group.default.id}"]
-  subnet_id                   = "${element(data.aws_subnet_ids.all.ids, 0)}"
-  associate_public_ip_address = true
-  user_data	= "${data.template_cloudinit_config.config.rendered}"
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["099720109477"] # Canonical
+}
+
+resource "aws_instance" "web" {
+  ami           = "${data.aws_ami.ubuntu.id}"
+  instance_type = "t2.micro"
+  count = 2
+
+  tags {
+    Name = "HelloWorld"
+  }
 }
